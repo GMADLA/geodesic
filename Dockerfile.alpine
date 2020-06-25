@@ -1,6 +1,6 @@
 #
 # Python Dependencies
-# TODO: Should python be installed via debian-slim
+#
 FROM alpine:3.11.6 as python
 
 RUN sed -i 's|http://dl-cdn.alpinelinux.org|https://alpine.global.ssl.fastly.net|g' /etc/apk/repositories
@@ -16,7 +16,7 @@ RUN apk add python3 python3-dev libffi-dev gcc linux-headers musl-dev openssl-de
 #   - libxml2
 #   - libxslt
 
-COPY requirements.deb.txt /requirements.txt
+COPY requirements.txt /requirements.txt
 
 RUN python3 -m pip install --upgrade pip setuptools wheel && \
     pip install -r /requirements.txt --ignore-installed --prefix=/dist --no-build-isolation --no-warn-script-location
@@ -24,31 +24,12 @@ RUN python3 -m pip install --upgrade pip setuptools wheel && \
 #
 # Google Cloud SDK
 #
-FROM google/cloud-sdk:294.0.0-slim as google-cloud-sdk
-
-# TODO: Temporary should be replaced by a debian package repo
-FROM cloudposse/packages:latest AS packages
-
-#
-# AWS CLI V2
-#
-FROM amazonlinux:2 as installer
-RUN yum update -y \
-  && yum install -y unzip \
-  && curl https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscli-exe-linux-x86_64.zip \
-  && unzip awscli-exe-linux-x86_64.zip \
-  && ./aws/install --bin-dir /aws-cli-bin/
+FROM google/cloud-sdk:294.0.0-alpine as google-cloud-sdk
 
 #
 # Geodesic base image
 #
-FROM debian:10.4-slim
-RUN apt update -y \
-&& apt dist-upgrade -y \
-&& apt install -y less groff curl
-
-COPY --from=installer /usr/local/aws-cli/ /usr/local/aws-cli/
-COPY --from=installer /aws-cli-bin/ /usr/local/bin/
+FROM alpine:3.11.6
 
 ENV BANNER "geodesic"
 
@@ -59,68 +40,29 @@ ENV KOPS_CLUSTER_NAME=example.foo.bar
 # Install all packages as root
 USER root
 
-# TODO: Install the cloudposse debian repository
+# install the cloudposse alpine repository
+ADD https://apk.cloudposse.com/ops@cloudposse.com.rsa.pub /etc/apk/keys/
+RUN echo "@cloudposse https://apk.cloudposse.com/3.11/vendor" >> /etc/apk/repositories
 
+# Use TLS for alpine default repos
+RUN sed -i 's|http://dl-cdn.alpinelinux.org|https://alpine.global.ssl.fastly.net|g' /etc/apk/repositories && \
+    echo "@testing https://alpine.global.ssl.fastly.net/alpine/edge/testing" >> /etc/apk/repositories && \
+    echo "@community https://alpine.global.ssl.fastly.net/alpine/edge/community" >> /etc/apk/repositories
 
-# TODO: TLS for debian default repos
-
-# Install debian package manifest
-# TODO: Port cache bust to debian
-COPY packages.deb.txt /etc/apt/packages.txt
+# Install alpine package manifest
+COPY packages.txt /etc/apk/
 # Install repo checksum in an attempt to ensure updates bust the Docker build cache
-#COPY geodesic_apkindex.md5 /var/cache/apk/
-#COPY rootfs/usr/local/bin/geodesic-apkindex-md5 /tmp/
+COPY geodesic_apkindex.md5 /var/cache/apk/
+COPY rootfs/usr/local/bin/geodesic-apkindex-md5 /tmp/
 
-RUN apt install -y $(grep -v '^#' /etc/apt/packages.txt) && \
+RUN apk add --update $(grep -v '^#' /etc/apk/packages.txt) && \
     mkdir -p /etc/bash_completion.d/ /etc/profile.d/ /conf && \
     touch /conf/.gitconfig
 
-# TODO: Port packages to debian in cloudposse/packages
-COPY --from=packages /packages/bin/awless /usr/local/bin
-COPY --from=packages /packages/bin/aws-iam-authenticator /usr/local/bin
-COPY --from=packages /packages/bin/aws-vault /usr/local/bin
-COPY --from=packages /packages/bin/cfssl /usr/local/bin
-COPY --from=packages /packages/bin/chamber /usr/local/bin
-COPY --from=packages /packages/bin/fetch /usr/local/bin
-COPY --from=packages /packages/bin/emailcli /usr/local/bin
-COPY --from=packages /packages/bin/figurine /usr/local/bin
-COPY --from=packages /packages/bin/fzf /usr/local/bin
-COPY --from=packages /packages/bin/github-commenter /usr/local/bin
-COPY --from=packages /packages/bin/gomplate /usr/local/bin
-COPY --from=packages /packages/bin/goofys /usr/local/bin
-COPY --from=packages /packages/bin/gosu /usr/local/bin
-COPY --from=packages /packages/bin/helm2 /usr/local/bin
-COPY --from=packages /packages/bin/helm3 /usr/local/bin
-COPY --from=packages /packages/bin/helmfile /usr/local/bin
-COPY --from=packages /packages/bin/kops /usr/bin
-COPY --from=packages /packages/bin/kubectl /usr/local/bin
-COPY --from=packages /packages/bin/kubectx /usr/local/bin
-COPY --from=packages /packages/bin/kubens /usr/local/bin
-COPY --from=packages /packages/bin/pandoc /usr/local/bin
-COPY --from=packages /packages/bin/rakkess /usr/local/bin
-COPY --from=packages /packages/bin/rbac-lookup /usr/local/bin
-COPY --from=packages /packages/bin/retry /usr/local/bin
-COPY --from=packages /packages/bin/scenery /usr/local/bin
-COPY --from=packages /packages/bin/shellcheck /usr/local/bin
-COPY --from=packages /packages/bin/shfmt /usr/local/bin
-COPY --from=packages /packages/bin/sops /usr/local/bin
-COPY --from=packages /packages/bin/stern /usr/local/bin
-COPY --from=packages /packages/bin/teleport /usr/local/bin
-COPY --from=packages /packages/bin/terraform /usr/local/bin
-COPY --from=packages /packages/bin/terragrunt /usr/local/bin
-COPY --from=packages /packages/bin/terrahelp /usr/local/bin
-COPY --from=packages /packages/bin/tfenv /usr/local/bin
-COPY --from=packages /packages/bin/tfmask /usr/local/bin
-COPY --from=packages /packages/bin/variant /usr/local/bin
-COPY --from=packages /packages/bin/variant2 /usr/local/bin
-COPY --from=packages /packages/bin/yq /usr/local/bin
+RUN [[ $(/tmp/geodesic-apkindex-md5) == $(cat /var/cache/apk/geodesic_apkindex.md5) ]] || echo "WARNING: apk package repos mismatch: '$(/tmp/geodesic-apkindex-md5)' != '$(cat /var/cache/apk/geodesic_apkindex.md5)'" 1>&2
+RUN rm -f /tmp/geodesic-apkindex-md5
 
-
-
-# RUN [[ $(/tmp/geodesic-apkindex-md5) == $(cat /var/cache/apk/geodesic_apkindex.md5) ]] || echo "WARNING: apk package repos mismatch: '$(/tmp/geodesic-apkindex-md5)' != '$(cat /var/cache/apk/geodesic_apkindex.md5)'" 1>&2
-# RUN rm -f /tmp/geodesic-apkindex-md5
-
-# RUN echo "net.ipv6.conf.all.disable_ipv6=0" > /etc/sysctl.d/00-ipv6.conf
+RUN echo "net.ipv6.conf.all.disable_ipv6=0" > /etc/sysctl.d/00-ipv6.conf
 
 # Disable vim from reading a swapfile (incompatible with goofys)
 RUN echo 'set noswapfile' >> /etc/vim/vimrc
@@ -135,7 +77,7 @@ COPY --from=python /dist/ /usr/
 #
 ENV CLOUDSDK_CONFIG=/localhost/.config/gcloud/
 
-COPY --from=google-cloud-sdk /usr/lib/google-cloud-sdk/ /usr/local/google-cloud-sdk/
+COPY --from=google-cloud-sdk /google-cloud-sdk/ /usr/local/google-cloud-sdk/
 
 RUN ln -s /usr/local/google-cloud-sdk/completion.bash.inc /etc/bash_completion.d/gcloud.sh && \
     ln -s /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/ && \
@@ -288,8 +230,7 @@ COPY rootfs/ /
 COPY docs/ /usr/share/docs/
 
 # Build man pages
-# TODO: Put back
-# RUN /usr/local/bin/docs update
+RUN /usr/local/bin/docs update
 
 WORKDIR /conf
 
