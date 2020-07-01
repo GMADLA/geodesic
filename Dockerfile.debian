@@ -1,33 +1,16 @@
 #
 # Python Dependencies
-# TODO: Should python be installed via debian-slim
 FROM alpine:3.11.6 as python
 
 RUN sed -i 's|http://dl-cdn.alpinelinux.org|https://alpine.global.ssl.fastly.net|g' /etc/apk/repositories
 RUN apk add python3 python3-dev libffi-dev gcc linux-headers musl-dev openssl-dev make
-
-## Note:
-# To install aws-gogle-auth:
-# - add `aws-google-auth==0.0.34` to requirements.txt
-# - add these libraries here (python build time)
-#   - libjpeg-turbo-dev libxml2-dev libxslt-dev
-# - add these libraries to packages.txt
-#   - libjpeg-turbo
-#   - libxml2
-#   - libxslt
 
 COPY requirements.deb.txt /requirements.txt
 
 RUN python3 -m pip install --upgrade pip setuptools wheel && \
     pip install -r /requirements.txt --ignore-installed --prefix=/dist --no-build-isolation --no-warn-script-location
 
-#
-# Google Cloud SDK
-#
-FROM google/cloud-sdk:294.0.0-slim as google-cloud-sdk
-
-# TODO: Temporary should be replaced by a debian package repo
-FROM cloudposse/packages:latest AS packages
+FROM cloudposse/geodesic:0.132.2 AS geodesic
 
 #
 # AWS CLI V2
@@ -68,59 +51,57 @@ USER root
 # TODO: Port cache bust to debian
 COPY packages.deb.txt /etc/apt/packages.txt
 # Install repo checksum in an attempt to ensure updates bust the Docker build cache
-#COPY geodesic_apkindex.md5 /var/cache/apk/
-#COPY rootfs/usr/local/bin/geodesic-apkindex-md5 /tmp/
+
 
 RUN apt install -y $(grep -v '^#' /etc/apt/packages.txt) && \
     mkdir -p /etc/bash_completion.d/ /etc/profile.d/ /conf && \
     touch /conf/.gitconfig
 
-# TODO: Port packages to debian in cloudposse/packages
-COPY --from=packages /packages/bin/awless /usr/local/bin
-COPY --from=packages /packages/bin/aws-iam-authenticator /usr/local/bin
-COPY --from=packages /packages/bin/aws-vault /usr/local/bin
-COPY --from=packages /packages/bin/cfssl /usr/local/bin
-COPY --from=packages /packages/bin/chamber /usr/local/bin
-COPY --from=packages /packages/bin/fetch /usr/local/bin
-COPY --from=packages /packages/bin/emailcli /usr/local/bin
-COPY --from=packages /packages/bin/figurine /usr/local/bin
-COPY --from=packages /packages/bin/fzf /usr/local/bin
-COPY --from=packages /packages/bin/github-commenter /usr/local/bin
-COPY --from=packages /packages/bin/gomplate /usr/local/bin
-COPY --from=packages /packages/bin/goofys /usr/local/bin
-COPY --from=packages /packages/bin/gosu /usr/local/bin
-COPY --from=packages /packages/bin/helm2 /usr/local/bin
-COPY --from=packages /packages/bin/helm3 /usr/local/bin
-COPY --from=packages /packages/bin/helmfile /usr/local/bin
-COPY --from=packages /packages/bin/kops /usr/bin
-COPY --from=packages /packages/bin/kubectl /usr/local/bin
-COPY --from=packages /packages/bin/kubectx /usr/local/bin
-COPY --from=packages /packages/bin/kubens /usr/local/bin
-COPY --from=packages /packages/bin/pandoc /usr/local/bin
-COPY --from=packages /packages/bin/rakkess /usr/local/bin
-COPY --from=packages /packages/bin/rbac-lookup /usr/local/bin
-COPY --from=packages /packages/bin/retry /usr/local/bin
-COPY --from=packages /packages/bin/scenery /usr/local/bin
-COPY --from=packages /packages/bin/shellcheck /usr/local/bin
-COPY --from=packages /packages/bin/shfmt /usr/local/bin
-COPY --from=packages /packages/bin/sops /usr/local/bin
-COPY --from=packages /packages/bin/stern /usr/local/bin
-COPY --from=packages /packages/bin/teleport /usr/local/bin
-COPY --from=packages /packages/bin/terraform /usr/local/bin
-COPY --from=packages /packages/bin/terragrunt /usr/local/bin
-COPY --from=packages /packages/bin/terrahelp /usr/local/bin
-COPY --from=packages /packages/bin/tfenv /usr/local/bin
-COPY --from=packages /packages/bin/tfmask /usr/local/bin
-COPY --from=packages /packages/bin/variant /usr/local/bin
-COPY --from=packages /packages/bin/variant2 /usr/local/bin
-COPY --from=packages /packages/bin/yq /usr/local/bin
+# TODO: Work out this bit so we don't have the long list below.
+# COPY packages.cp.txt /etc/cp/packages.txt
+# COPY --from=geodesic /usr/bin/ /etc/geodesic/
+# WORKDIR /etc/geodesic
+# RUN cp -R $(grep -v '^#' /etc/cp/packages.txt) /usr/bin/ \
+# && ls -l /usr/bin/
 
-
-
-# RUN [[ $(/tmp/geodesic-apkindex-md5) == $(cat /var/cache/apk/geodesic_apkindex.md5) ]] || echo "WARNING: apk package repos mismatch: '$(/tmp/geodesic-apkindex-md5)' != '$(cat /var/cache/apk/geodesic_apkindex.md5)'" 1>&2
-# RUN rm -f /tmp/geodesic-apkindex-md5
-
-# RUN echo "net.ipv6.conf.all.disable_ipv6=0" > /etc/sysctl.d/00-ipv6.conf
+COPY --from=geodesic /usr/bin/awless /usr/local/bin
+COPY --from=geodesic /usr/bin/aws-iam-authenticator /usr/local/bin
+COPY --from=geodesic /usr/bin/aws-vault /usr/local/bin
+COPY --from=geodesic /usr/bin/cfssl /usr/local/bin
+COPY --from=geodesic /usr/bin/chamber /usr/local/bin
+COPY --from=geodesic /usr/bin/fetch /usr/local/bin
+COPY --from=geodesic /usr/bin/email /usr/local/bin
+COPY --from=geodesic /usr/bin/figurine /usr/local/bin
+COPY --from=geodesic /usr/bin/fzf /usr/local/bin
+COPY --from=geodesic /usr/bin/github-commenter /usr/local/bin
+COPY --from=geodesic /usr/bin/gomplate /usr/local/bin
+COPY --from=geodesic /usr/bin/goofys /usr/local/bin
+COPY --from=geodesic /usr/bin/gosu /usr/local/bin
+COPY --from=geodesic /usr/bin/helm2 /usr/local/bin
+COPY --from=geodesic /usr/bin/helm3 /usr/local/bin
+COPY --from=geodesic /usr/bin/helmfile /usr/local/bin
+COPY --from=geodesic /usr/bin/kops /usr/bin
+COPY --from=geodesic /usr/bin/kubectl /usr/local/bin
+COPY --from=geodesic /usr/bin/kubectx /usr/local/bin
+COPY --from=geodesic /usr/bin/kubens /usr/local/bin
+COPY --from=geodesic /usr/bin/pandoc /usr/local/bin
+COPY --from=geodesic /usr/bin/rakkess /usr/local/bin
+COPY --from=geodesic /usr/bin/rbac-lookup /usr/local/bin
+COPY --from=geodesic /usr/bin/retry /usr/local/bin
+COPY --from=geodesic /usr/bin/scenery /usr/local/bin
+COPY --from=geodesic /usr/bin/shellcheck /usr/local/bin
+COPY --from=geodesic /usr/bin/shfmt /usr/local/bin
+COPY --from=geodesic /usr/bin/sops /usr/local/bin
+COPY --from=geodesic /usr/bin/stern /usr/local/bin
+COPY --from=geodesic /usr/bin/teleport /usr/local/bin
+COPY --from=geodesic /usr/bin/terraform /usr/local/bin
+COPY --from=geodesic /usr/bin/terragrunt /usr/local/bin
+COPY --from=geodesic /usr/bin/terrahelp /usr/local/bin
+COPY --from=geodesic /usr/bin/tfenv /usr/local/bin
+COPY --from=geodesic /usr/bin/tfmask /usr/local/bin
+COPY --from=geodesic /usr/bin/variant /usr/local/bin
+COPY --from=geodesic /usr/bin/variant2 /usr/local/bin
+COPY --from=geodesic /usr/bin/yq /usr/local/bin
 
 # Disable vim from reading a swapfile (incompatible with goofys)
 RUN echo 'set noswapfile' >> /etc/vim/vimrc
@@ -133,17 +114,17 @@ COPY --from=python /dist/ /usr/
 #
 # Install Google Cloud SDK
 #
-ENV CLOUDSDK_CONFIG=/localhost/.config/gcloud/
+# ENV CLOUDSDK_CONFIG=/localhost/.config/gcloud/
 
-COPY --from=google-cloud-sdk /usr/lib/google-cloud-sdk/ /usr/local/google-cloud-sdk/
+# COPY --from=google-cloud-sdk /usr/lib/google-cloud-sdk/ /usr/local/google-cloud-sdk/
 
-RUN ln -s /usr/local/google-cloud-sdk/completion.bash.inc /etc/bash_completion.d/gcloud.sh && \
-    ln -s /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/ && \
-    ln -s /usr/local/google-cloud-sdk/bin/gsutil /usr/local/bin/ && \
-    ln -s /usr/local/google-cloud-sdk/bin/bq /usr/local/bin/ && \
-    gcloud config set core/disable_usage_reporting true --installation && \
-    gcloud config set component_manager/disable_update_check true --installation && \
-    gcloud config set metrics/environment github_docker_image --installation
+# RUN ln -s /usr/local/google-cloud-sdk/completion.bash.inc /etc/bash_completion.d/gcloud.sh && \
+#     ln -s /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/ && \
+#     ln -s /usr/local/google-cloud-sdk/bin/gsutil /usr/local/bin/ && \
+#     ln -s /usr/local/google-cloud-sdk/bin/bq /usr/local/bin/ && \
+#     gcloud config set core/disable_usage_reporting true --installation && \
+#     gcloud config set component_manager/disable_update_check true --installation && \
+#     gcloud config set metrics/environment github_docker_image --installation
 
 #
 # Configure aws-okta to easily assume roles
@@ -154,35 +135,21 @@ ENV AWS_OKTA_ENABLED=false
 # Install kubectl
 #
 # Set KUBERNETES_VERSION and KOPS_BASE_IMAGE in /conf/kops/kops.envrc
-RUN kubectl completion bash > /etc/bash_completion.d/kubectl.sh
+COPY --from=geodesic /etc/bash_completion.d/ /etc/bash_completion.d/
+
+#RUN kubectl completion bash > /etc/bash_completion.d/kubectl.sh
 ENV KUBECTX_COMPLETION_VERSION 0.9.0
-ADD https://raw.githubusercontent.com/ahmetb/kubectx/v${KUBECTX_COMPLETION_VERSION}/completion/kubens.bash /etc/bash_completion.d/kubens.sh
-ADD https://raw.githubusercontent.com/ahmetb/kubectx/v${KUBECTX_COMPLETION_VERSION}/completion/kubectx.bash /etc/bash_completion.d/kubectx.sh
 
 #
 # Install kops
 #
 ENV KOPS_MANIFEST=/conf/kops/manifest.yaml
 ENV KOPS_TEMPLATE=/templates/kops/default.yaml
-## Set these to better values in child Dockerfile:
-#ENV KOPS_STATE_STORE s3://undefined
-#ENV KOPS_STATE_STORE_REGION us-east-1
-#ENV KOPS_FEATURE_FLAGS=+DrainAndValidateRollingUpdate
 
 ENV KOPS_BASTION_PUBLIC_NAME="bastion"
 
-# Set the KOPS_BASE_IMAGE to match your kops version. See:
-# https://github.com/kubernetes/kops/blob/master/channels/stable
-# https://github.com/kubernetes/kops/blob/master/docs/images.md
-#
-# Do not rely on KOPS_BASE_IMAGE being set in Geodesic. This will go away in future versions.
-# Set it in your /conf/kops/kops.envrc file, along with KUBERNETES_VERSION
-# ENV KOPS_BASE_IMAGE=kope.io/k8s-1.11-debian-stretch-amd64-hvm-ebs-2018-08-17
-
 ENV KUBECONFIG=/dev/shm/kubecfg
 ENV KUBECONFIG_TEMPLATE=/templates/kops/kubecfg.yaml
-
-RUN /usr/bin/kops completion bash > /etc/bash_completion.d/kops.sh
 
 # Instance sizes
 ENV BASTION_MACHINE_TYPE "t3.small"
@@ -200,18 +167,18 @@ ENV NODE_MIN_SIZE 2
 ENV HELM_HOME /var/lib/helm
 ENV HELM_VALUES_PATH=${SECRETS_PATH}/helm/values
 
-RUN helm2 completion bash > /etc/bash_completion.d/helm2.sh \
-    && mkdir -p ${HELM_HOME} \
-    && helm2 init --client-only \
-    && mkdir -p ${HELM_HOME}/plugins
-# Enable Atlantis to manage helm 2
-RUN chmod -R 777 ${HELM_HOME}
+COPY --from=geodesic ${HELM_HOME} ${HELM_HOME}
+RUN helm2 init --client-only
+# RUN chmod -R 777 ${HELM_HOME}
+
 
 # helm version 3 config
 ENV HELM_PATH_CACHE /var/cache
 ENV HELM_PATH_CONFIG /etc
 ENV HELM_PATH_DATA /usr/share
-RUN mkdir -p ${HELM_PATH_CACHE}/helm ${HELM_PATH_CONFIG}/helm ${HELM_PATH_DATA}/helm
+COPY --from=geodesic ${HELM_PATH_CACHE}/helm ${HELM_PATH_CACHE}/helm
+COPY --from=geodesic ${HELM_PATH_CONFIG}/helm ${HELM_PATH_CONFIG}/helm
+COPY --from=geodesic ${HELM_PATH_DATA}/helm ${HELM_PATH_DATA}/helm
 
 # Enable Atlantis to manage helm 3
 RUN chmod -R 777 ${HELM_PATH_CACHE}/helm ${HELM_PATH_CONFIG}/helm ${HELM_PATH_DATA}/helm
@@ -223,19 +190,11 @@ ENV HELM_DIFF_VERSION 3.1.1
 ENV HELM_GIT_VERSION 0.7.0
 ENV HELM_HELM_2TO3_VERSION 0.5.1
 
-RUN helm2 plugin install https://github.com/databus23/helm-diff.git --version v${HELM_DIFF_VERSION} \
-    && helm2 plugin install https://github.com/aslafy-z/helm-git.git --version ${HELM_GIT_VERSION}
-
-RUN helm3 plugin install https://github.com/databus23/helm-diff.git --version v${HELM_DIFF_VERSION} \
-    && helm3 plugin install https://github.com/aslafy-z/helm-git.git --version ${HELM_GIT_VERSION} \
-    && helm3 plugin install https://github.com/helm/helm-2to3 --version ${HELM_HELM_2TO3_VERSION}
-
-
 #
 # Install fancy Kube PS1 Prompt
 #
 ENV KUBE_PS1_VERSION 0.7.0
-ADD https://raw.githubusercontent.com/jonmosco/kube-ps1/v${KUBE_PS1_VERSION}/kube-ps1.sh /etc/profile.d/prompt:kube-ps1.sh
+COPY --from=geodesic /etc/profile.d/prompt:kube-ps1.sh /etc/profile.d/prompt:kube-ps1.sh
 
 #
 # AWS
@@ -283,12 +242,14 @@ RUN find ${XDG_CONFIG_HOME} -type f -name '*.sh' -exec chmod 755 {} \;
 
 # Install "root" filesystem
 COPY rootfs/ /
+COPY rootfs-debian/ /
 
 # Install documentation
 COPY docs/ /usr/share/docs/
 
+RUN locale-gen en_US.UTF-8
+
 # Build man pages
-# TODO: Put back
 # RUN /usr/local/bin/docs update
 
 WORKDIR /conf

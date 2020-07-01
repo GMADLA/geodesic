@@ -30,3 +30,4 @@ tar
 unzip
 util-linux
 vim
+locales

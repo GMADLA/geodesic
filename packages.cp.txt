@@ -5,7 +5,7 @@ aws-vault
 cfssl
 chamber
 fetch
-emailcli
+email
 figurine
 fzf
 github-commenter
