@@ -1,6 +1,4 @@
 
 IMPORTANT:
 * Your $HOME directory has been mounted to `/localhost`
-* You may use `aws-vault` to manage your sessions
-* Run `assume-role` to start a session
-** Note you may pass --aws-sso flag for a session with AWS CLI v2
+* Run `aws-sso` to start a session
