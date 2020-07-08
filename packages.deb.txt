@@ -22,7 +22,6 @@ openssh-client
 openssl
 postgresql-client
 pwgen
-python3
 sshpass
 sudo
 syslog-ng
